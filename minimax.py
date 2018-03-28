@@ -1,13 +1,14 @@
 """
 optimizations:
-- do not create a list of successors, build up a state recursively and then unbuild it returning
-- use integer values for operations
+- [DONE] do not create a list of successors, build up a state recursively and then unbuild it returning
+- [DONE] use integer values for operations
 - do not waste time at the beginning, the algorithm will always return the same values for the first move(s) 
 """
 
 
 import copy
 from random import randint
+
 
 """
 Game_state
@@ -122,7 +123,7 @@ class Game_state:
                     # oblique down
                     if i - 2 >= 0 and j + 2 < 7:
                         tot_count += self.count_connect3(-1, 1, i, j)
-        return 0.05 * tot_count
+        return tot_count
     
     def print(self):
         idx = 0
@@ -141,48 +142,38 @@ class Game_state:
 class Minimax_agent:
     def __init__(self, max_depth = 5):
         self.INF = 99999999
+        self.WIN = 10000
+        self.CONNECT3 = 50
+        self.DISCOUNT = 1
         self.player1 = 1
         self.player2 = 2
         self.max_depth = max_depth
 
     def discount(self, val, depth):
         if val > 0:
-            return -0.001 * depth + val
+            return self.DISCOUNT * depth + val
         elif val < 0:
-            return 0.001 * depth + val
+            return self.DISCOUNT * depth + val
         else:
             return val
 
-    def get_successors(self, state, color):
-        successors = []
-        for pos in range(7):
-            if state.heights[pos] < 6:
-                next_state = copy.deepcopy(state)
-                next_state.insert_coin(pos, color)            
-                successors.append(next_state)
-        return successors
+    def can_insert_coin(self, state, pos):
+        return (state.heights[pos] <= 5)
 
-    # [(nex_state, move), ...]
-    def get_successors_with_moves(self, state, color):
-        successors = []
-        for pos in range(7):
-            if state.heights[pos] < 6:
-                next_state = copy.deepcopy(state)
-                next_state.insert_coin(pos, color)            
-                successors.append((next_state, pos))
-        return successors
-        
     def max_node(self, state, depth, alpha, beta):
         if state.is_win(): # other player won
             #print("human won in an evaluation")
-            return self.discount(-1, depth)
+            return self.discount(-self.WIN, depth)
         if(depth == self.max_depth):
-            return self.discount(state.evaluate(), depth)
+            return self.discount(self.CONNECT3 * state.evaluate(), depth)
 
         max_val = -self.INF
-        for next_state in self.get_successors(state, self.player1):
-            #next_state.print()
-            max_val = max(max_val, self.min_node(next_state, depth + 1, alpha, beta))
+        for idx in range(7):
+            if not self.can_insert_coin(state, idx):
+                continue
+            state.insert_coin(idx, self.player1) # insert coin and go down with recursion
+            max_val = max(max_val, self.min_node(state, depth + 1, alpha, beta))
+            state.remove_coin(idx) # remove coin to get the previous state
             if max_val >= beta:
                 return max_val
             alpha = max(alpha, max_val)
@@ -191,14 +182,17 @@ class Minimax_agent:
     def min_node(self, state, depth, alpha, beta):
         if state.is_win(): # other player won
             #print("pc won in an evaluation")
-            return self.discount(1, depth)
+            return self.discount(self.WIN, depth)
         if(depth == self.max_depth):
-            return self.discount(state.evaluate(), depth)
+            return self.discount(self.CONNECT3 * state.evaluate(), depth)
 
         min_val = self.INF
-        for next_state in self.get_successors(state, self.player2):
-            #next_state.print()
-            min_val = min(min_val, self.max_node(next_state, depth + 1, alpha, beta))
+        for idx in range(7):
+            if not self.can_insert_coin(state, idx):
+                continue
+            state.insert_coin(idx, self.player2) # insert coin and go on with recursion   
+            min_val = min(min_val, self.max_node(state, depth + 1, alpha, beta))
+            state.remove_coin(idx) # remove coin to get the previous state
             if min_val <= alpha:
                 return min_val
             beta = max(beta, min_val)
@@ -208,16 +202,19 @@ class Minimax_agent:
         print("getting values for moves: ")
         max_val = -self.INF
         best_moves = []
-        for next_state in self.get_successors_with_moves(state, self.player1):
-            #next_state[0].print()
-            tmp = self.min_node(next_state[0], 1, -self.INF, self.INF)
+        for idx in range(7):
+            if not self.can_insert_coin(state, idx):
+                continue
+            state.insert_coin(idx, self.player1)
+            tmp = self.min_node(state, 1, -self.INF, self.INF)
+            state.remove_coin(idx)
             print(tmp, end=" ")
             if tmp > max_val:
                 best_moves.clear()
                 max_val = tmp
-                best_moves.append(next_state[1])
+                best_moves.append(idx)
             elif tmp == max_val:
-                best_moves.append(next_state[1])
+                best_moves.append(idx)
         return best_moves[randint(0, len(best_moves)-1)]
 
 
