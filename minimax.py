@@ -5,9 +5,8 @@ optimizations:
 - do not waste time at the beginning, the algorithm will always return the same values for the first move(s) 
 """
 
-
-import copy
 from random import randint
+import time
 
 
 """
@@ -44,23 +43,21 @@ class Game_state:
             self.heights = heights 
 
     def col_to_idx(self, col):
-        #print(col, " to idx ", (7 * (6 - self.heights[col])) + col)
         return (7 * (6 - self.heights[col])) + col
     
     def ij_to_idx(self, i, j):
-        #print(i, j, " to idx ", (i * 7) + j)
         return (i * 7) + j
     
     def insert_coin(self, pos, color):
         if pos < 0 or pos > 6 or self.heights[pos] >= 6:
             raise ValueError("Trying to insert a coin out of limits")
-        self.heights[pos] += 1          # the order of this two operations in critical
+        self.heights[pos] += 1          # the order of this two operations is critical
         self.state[self.col_to_idx(pos)] = color
 
     def remove_coin(self, pos):
         if pos < 0 or pos > 6 or self.heights[pos] <= 0:
             raise ValueError("Trying to insert a coin out of limits")
-        self.state[self.col_to_idx(pos)] = 0      # the order of this two operations in critical
+        self.state[self.col_to_idx(pos)] = 0      # the order of this two operations is critical
         self.heights[pos] -= 1
 
     def check_connect4(self, f1, f2, i, j):
@@ -140,14 +137,16 @@ class Game_state:
 
 
 class Minimax_agent:
-    def __init__(self, max_depth = 5):
+    def __init__(self, max_depths, default_depth):
         self.INF = 99999999
         self.WIN = 10000
         self.CONNECT3 = 50
         self.DISCOUNT = 1
         self.player1 = 1
         self.player2 = 2
-        self.max_depth = max_depth
+        self.turn = 0
+        self.max_depths = max_depths
+        self.default_depth = default_depth  
 
     def discount(self, val, depth):
         if val > 0:
@@ -161,8 +160,7 @@ class Minimax_agent:
         return (state.heights[pos] <= 5)
 
     def max_node(self, state, depth, alpha, beta):
-        if state.is_win(): # other player won
-            #print("human won in an evaluation")
+        if state.is_win(): # human won
             return self.discount(-self.WIN, depth)
         if(depth == self.max_depth):
             return self.discount(self.CONNECT3 * state.evaluate(), depth)
@@ -180,8 +178,7 @@ class Minimax_agent:
         return self.discount(max_val, depth)
 
     def min_node(self, state, depth, alpha, beta):
-        if state.is_win(): # other player won
-            #print("pc won in an evaluation")
+        if state.is_win(): # pc won
             return self.discount(self.WIN, depth)
         if(depth == self.max_depth):
             return self.discount(self.CONNECT3 * state.evaluate(), depth)
@@ -199,30 +196,52 @@ class Minimax_agent:
         return min_val
 
     def get_move(self, state):
-        print("getting values for moves: ")
+        print("getting values for moves: ", end="")
+        self.turn += 1
+
+        # get max depth
+        self.max_depth = self.default_depth
+        if self.turn in self.max_depths.keys():
+            self.max_depth = self.max_depths[self.turn]
+        print("[with depth ", str(self.max_depth) + "]")
+
+        start = time.time()
+
         max_val = -self.INF
+        alpha   = -self.INF
         best_moves = []
         for idx in range(7):
             if not self.can_insert_coin(state, idx):
                 continue
             state.insert_coin(idx, self.player1)
-            tmp = self.min_node(state, 1, -self.INF, self.INF)
+            tmp = self.min_node(state, 1, alpha, self.INF)
             state.remove_coin(idx)
             print(tmp, end=" ")
             if tmp > max_val:
                 best_moves.clear()
                 max_val = tmp
                 best_moves.append(idx)
+                alpha = max_val
             elif tmp == max_val:
                 best_moves.append(idx)
+
+        end = time.time()
+        print("\nTime elapsed:", end - start)
+        
         return best_moves[randint(0, len(best_moves)-1)]
 
 
 def main():
-    max_depth = int(input("select the depth of the opponent (default is 5): "))
+    # turn | depth
+    #  1   |   1
+    #  2   |   4
+    #  3   |   5
+    # ...
+    max_depths = {1: 1, 2: 4, 3: 5, 4: 6, 5: 6, 6: 7, 7: 7, 8: 8, 9: 8, 10: 9, 11: 9, 12: 10, 13: 10}
+    default_depth = 15
 
     curr_state = Game_state()
-    agent = Minimax_agent(max_depth)
+    agent = Minimax_agent(max_depths, default_depth)
 
     curr_state.print()
 
@@ -236,7 +255,7 @@ def main():
             pos = agent.get_move(curr_state)
             curr_state.insert_coin(pos, 1)
             turn = 2
-        print("\n_______________\n")
+        print("\n_________________\n")
         curr_state.print()
     print("Game over")
     
