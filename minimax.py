@@ -6,8 +6,8 @@ optimizations:
 """
 
 from random import randint
-import time
-
+import time # measure performance
+import sys  # flush print
 
 """
 Game_state
@@ -146,11 +146,17 @@ class Minimax_agent:
         self.player2 = 2
         self.turn = 0
         self.max_depths = max_depths
-        self.default_depth = default_depth  
+        self.default_depth = default_depth 
+
+        self.times = []
+
+    def print_times(self):
+        for i, time in enumerate(self.times):
+            print("%d. time: %.4f\t\t | depth: %d" % (i+1, time, self.get_max_depth(i+1)))
 
     def discount(self, val, depth):
         if val > 0:
-            return self.DISCOUNT * depth + val
+            return -self.DISCOUNT * depth + val
         elif val < 0:
             return self.DISCOUNT * depth + val
         else:
@@ -158,6 +164,14 @@ class Minimax_agent:
 
     def can_insert_coin(self, state, pos):
         return (state.heights[pos] <= 5)
+
+    def get_max_depth(self, turn, print_val=False):
+        max_depth = self.default_depth
+        if turn in self.max_depths.keys():
+            max_depth = self.max_depths[turn]
+        if print_val:
+            print("[with depth ", str(max_depth) + "]")
+        return max_depth
 
     def max_node(self, state, depth, alpha, beta):
         if state.is_win(): # human won
@@ -172,7 +186,7 @@ class Minimax_agent:
             state.insert_coin(idx, self.player1) # insert coin and go down with recursion
             max_val = max(max_val, self.min_node(state, depth + 1, alpha, beta))
             state.remove_coin(idx) # remove coin to get the previous state
-            if max_val >= beta:
+            if max_val > beta:
                 return max_val
             alpha = max(alpha, max_val)
         return self.discount(max_val, depth)
@@ -190,43 +204,40 @@ class Minimax_agent:
             state.insert_coin(idx, self.player2) # insert coin and go on with recursion   
             min_val = min(min_val, self.max_node(state, depth + 1, alpha, beta))
             state.remove_coin(idx) # remove coin to get the previous state
-            if min_val <= alpha:
+            if min_val < alpha:
                 return min_val
-            beta = max(beta, min_val)
-        return min_val
+            beta = min(beta, min_val)
+        return self.discount(min_val, depth)
 
     def get_move(self, state):
         print("getting values for moves: ", end="")
         self.turn += 1
 
         # get max depth
-        self.max_depth = self.default_depth
-        if self.turn in self.max_depths.keys():
-            self.max_depth = self.max_depths[self.turn]
-        print("[with depth ", str(self.max_depth) + "]")
+        self.max_depth = self.get_max_depth(self.turn, True)
 
         start = time.time()
 
         max_val = -self.INF
-        alpha   = -self.INF
         best_moves = []
         for idx in range(7):
             if not self.can_insert_coin(state, idx):
                 continue
             state.insert_coin(idx, self.player1)
-            tmp = self.min_node(state, 1, alpha, self.INF)
+            tmp = self.min_node(state, 1, -self.INF, self.INF)
             state.remove_coin(idx)
             print(tmp, end=" ")
+            sys.stdout.flush() # avoid buffering on print
             if tmp > max_val:
                 best_moves.clear()
                 max_val = tmp
                 best_moves.append(idx)
-                alpha = max_val
             elif tmp == max_val:
                 best_moves.append(idx)
 
         end = time.time()
         print("\nTime elapsed:", end - start)
+        self.times.append(end - start)
         
         return best_moves[randint(0, len(best_moves)-1)]
 
@@ -255,9 +266,10 @@ def main():
             pos = agent.get_move(curr_state)
             curr_state.insert_coin(pos, 1)
             turn = 2
-        print("\n_________________\n")
+        print("\n_____________________\n")
         curr_state.print()
     print("Game over")
+    agent.print_times()
     
 if __name__ == "__main__":
     main()    
