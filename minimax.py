@@ -142,16 +142,15 @@ class Minimax_agent:
         self.WIN = 10000
         self.CONNECT3 = 50
         self.DISCOUNT = 1
-        self.player1 = 1
-        self.player2 = 2
+        self.PLAYER1 = 1
+        self.PLAYER2 = 2
         self.turn = 0
         self.max_depths = max_depths
         self.default_depth = default_depth 
+        self.turn_times = []
 
-        self.times = []
-
-    def print_times(self):
-        for i, time in enumerate(self.times):
+    def print_turn_times(self):
+        for i, time in enumerate(self.turn_times):
             print("%d. time: %.4f\t\t | depth: %d" % (i+1, time, self.get_max_depth(i+1)))
 
     def discount(self, val, depth):
@@ -183,12 +182,15 @@ class Minimax_agent:
         for idx in range(7):
             if not self.can_insert_coin(state, idx):
                 continue
-            state.insert_coin(idx, self.player1) # insert coin and go down with recursion
+            state.insert_coin(idx, self.PLAYER1) # insert coin and go down with recursion
             max_val = max(max_val, self.min_node(state, depth + 1, alpha, beta))
             state.remove_coin(idx) # remove coin to get the previous state
             if max_val > beta:
                 return max_val
             alpha = max(alpha, max_val)
+
+        if(max_val == -self.INF): # the game already ended with a tie and no moves have been done here
+            return 0
         return self.discount(max_val, depth)
 
     def min_node(self, state, depth, alpha, beta):
@@ -201,12 +203,15 @@ class Minimax_agent:
         for idx in range(7):
             if not self.can_insert_coin(state, idx):
                 continue
-            state.insert_coin(idx, self.player2) # insert coin and go on with recursion   
+            state.insert_coin(idx, self.PLAYER2) # insert coin and go on with recursion   
             min_val = min(min_val, self.max_node(state, depth + 1, alpha, beta))
             state.remove_coin(idx) # remove coin to get the previous state
             if min_val < alpha:
                 return min_val
             beta = min(beta, min_val)
+
+        if(min_val == self.INF): # the game already ended with a tie and no moves have been done here
+            return 0
         return self.discount(min_val, depth)
 
     def get_move(self, state):
@@ -223,11 +228,13 @@ class Minimax_agent:
         for idx in range(7):
             if not self.can_insert_coin(state, idx):
                 continue
-            state.insert_coin(idx, self.player1)
+            state.insert_coin(idx, self.PLAYER1)
             tmp = self.min_node(state, 1, -self.INF, self.INF)
             state.remove_coin(idx)
+            
             print(tmp, end=" ")
             sys.stdout.flush() # avoid buffering on print
+            
             if tmp > max_val:
                 best_moves.clear()
                 max_val = tmp
@@ -237,7 +244,7 @@ class Minimax_agent:
 
         end = time.time()
         print("\nTime elapsed:", end - start)
-        self.times.append(end - start)
+        self.turn_times.append(end - start)
         
         return best_moves[randint(0, len(best_moves)-1)]
 
@@ -256,20 +263,19 @@ def main():
 
     curr_state.print()
 
-    turn = 2 # human
-    while not curr_state.is_win():
-        if turn == 2:
+    turn = 0 # human
+    while not curr_state.is_win() and turn < 42:
+        if turn % 2 == 0:
             pos = int(input("your move: "))
             curr_state.insert_coin(pos, 2)
-            turn = 1
         else:
             pos = agent.get_move(curr_state)
             curr_state.insert_coin(pos, 1)
-            turn = 2
+        turn += 1
         print("\n_____________________\n")
         curr_state.print()
     print("Game over")
-    agent.print_times()
+    agent.print_turn_times()
     
 if __name__ == "__main__":
     main()    
