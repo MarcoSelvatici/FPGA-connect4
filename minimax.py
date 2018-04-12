@@ -47,6 +47,9 @@ class Game_state:
     
     def ij_to_idx(self, i, j):
         return (i * 7) + j
+
+    def idx_to_ij(self, idx):
+        return (int(idx / 7), idx % 7)
     
     def insert_coin(self, pos, color):
         if pos < 0 or pos > 6 or self.heights[pos] >= 6:
@@ -85,6 +88,35 @@ class Game_state:
                     # oblique down
                     if (i - 3 >= 0 and j + 3 < 7) and self.check_connect4(-1, 1, i, j):
                         return True
+        return False
+
+    """
+    have to consider the case in wich I am in between
+    """
+    def is_win_fast(self, col):
+        i, j = self.idx_to_ij(self.col_to_idx(col))
+    	# horizontal
+        if (j + 3 < 7) and self.check_connect4(0, 1, i, j):
+            return True
+        if (j - 3 >= 0) and self.check_connect4(0, -1, i, j):
+            return True
+        # vertical
+        if (i + 3 < 6) and self.check_connect4(1, 0, i, j):
+            return True
+        if (i - 3 >= 0) and self.check_connect4(-1, 0, i, j):
+            return True
+        # oblique down right
+        if (i + 3 < 6 and j + 3 < 7) and self.check_connect4(1, 1, i, j):
+            return True
+        # oblique down left
+        if (i + 3 < 6 and j - 3 >= 0) and self.check_connect4(1, -1, i, j):
+            return True
+        # oblique up right
+        if (i - 3 >= 0 and j + 3 < 7) and self.check_connect4(-1, 1, i, j):
+            return True
+        # oblique up left
+        if (i - 3 >= 0 and j - 3 >= 0) and self.check_connect4(-1, -1, i, j):
+            return True
         return False
 
     def count_connect3(self, f1, f2, i, j):
@@ -144,6 +176,7 @@ class Minimax_agent:
         self.DISCOUNT = 1
         self.PLAYER1 = 1
         self.PLAYER2 = 2
+        self.columns = [3, 4, 2, 5, 1, 6, 0]
         self.turn = 0
         self.max_depths = max_depths
         self.default_depth = default_depth 
@@ -173,18 +206,22 @@ class Minimax_agent:
         return max_depth
 
     def max_node(self, state, depth, alpha, beta):
-        if state.is_win(): # human won
-            return self.discount(-self.WIN, depth)
         if(depth == self.max_depth):
             return self.discount(self.CONNECT3 * state.evaluate(), depth)
 
         max_val = -self.INF
-        for idx in range(7):
-            if not self.can_insert_coin(state, idx):
+        for col in self.columns:
+            if not self.can_insert_coin(state, col):
                 continue
-            state.insert_coin(idx, self.PLAYER1) # insert coin and go down with recursion
-            max_val = max(max_val, self.min_node(state, depth + 1, alpha, beta))
-            state.remove_coin(idx) # remove coin to get the previous state
+
+            state.insert_coin(col, self.PLAYER1) # insert coin and go down with recursion
+            # chek if this move lead to a win
+            if state.is_win():
+            	max_val = self.discount(self.WIN, depth)
+            else: # if not, we have to calculate everything normally
+            	max_val = max(max_val, self.min_node(state, depth + 1, alpha, beta))
+            state.remove_coin(col) # remove coin to get the previous state
+
             if max_val > beta:
                 return max_val
             alpha = max(alpha, max_val)
@@ -194,18 +231,22 @@ class Minimax_agent:
         return self.discount(max_val, depth)
 
     def min_node(self, state, depth, alpha, beta):
-        if state.is_win(): # pc won
-            return self.discount(self.WIN, depth)
         if(depth == self.max_depth):
             return self.discount(self.CONNECT3 * state.evaluate(), depth)
 
         min_val = self.INF
-        for idx in range(7):
-            if not self.can_insert_coin(state, idx):
+        for col in self.columns:
+            if not self.can_insert_coin(state, col):
                 continue
-            state.insert_coin(idx, self.PLAYER2) # insert coin and go on with recursion   
-            min_val = min(min_val, self.max_node(state, depth + 1, alpha, beta))
-            state.remove_coin(idx) # remove coin to get the previous state
+
+            state.insert_coin(col, self.PLAYER2) # insert coin and go on with recursion   
+            # chek if this move lead to a win
+            if state.is_win():
+            	min_val = self.discount(-self.WIN, depth)
+            else: # if not, we have to calculate everything normally
+            	min_val = min(min_val, self.max_node(state, depth + 1, alpha, beta))
+            state.remove_coin(col) # remove coin to get the previous state
+
             if min_val < alpha:
                 return min_val
             beta = min(beta, min_val)
@@ -225,12 +266,12 @@ class Minimax_agent:
 
         max_val = -self.INF
         best_moves = []
-        for idx in range(7):
-            if not self.can_insert_coin(state, idx):
+        for col in self.columns:
+            if not self.can_insert_coin(state, col):
                 continue
-            state.insert_coin(idx, self.PLAYER1)
+            state.insert_coin(col, self.PLAYER1)
             tmp = self.min_node(state, 1, -self.INF, self.INF)
-            state.remove_coin(idx)
+            state.remove_coin(col)
             
             print(tmp, end=" ")
             sys.stdout.flush() # avoid buffering on print
@@ -238,9 +279,9 @@ class Minimax_agent:
             if tmp > max_val:
                 best_moves.clear()
                 max_val = tmp
-                best_moves.append(idx)
+                best_moves.append(col)
             elif tmp == max_val:
-                best_moves.append(idx)
+                best_moves.append(col)
 
         end = time.time()
         print("\nTime elapsed:", end - start)
@@ -248,13 +289,23 @@ class Minimax_agent:
         
         return best_moves[randint(0, len(best_moves)-1)]
 
-
 def main():
     # turn | depth
     #  1   |   1
     #  2   |   4
     #  3   |   5
     # ...
+
+    """
+    curr_state = Game_state()
+    for _ in range(4):
+        curr_state.insert_coin(3, 1)
+
+    curr_state.print()
+    print("idx:", curr_state.col_to_idx(3), flush=True)
+    print(curr_state.is_win_fast(3))
+
+    """
     max_depths = {1: 1, 2: 4, 3: 5, 4: 6, 5: 6, 6: 6, 7: 6, 8: 7, 9: 7, 10: 7, 11: 8, 12: 8, 13: 9, 14: 9, 15: 10}
     default_depth = 15
 
