@@ -1,13 +1,14 @@
-"""
-optimizations:
-- [DONE] do not create a list of successors, build up a state recursively and then unbuild it returning
-- [DONE] use integer values for operations
-- do not waste time at the beginning, the algorithm will always return the same values for the first move(s) 
-"""
+
 
 from random import randint
-import time # measure performance
 import sys  # flush print
+
+import time # measure time performance
+
+# ====================== remove next 3 lines if not working on the board ===========================
+import os
+import psutil # measure memory usage
+process = psutil.Process(os.getpid())
 
 """
 Game_state
@@ -17,7 +18,7 @@ Game_state
 2 -> blue (human)
 3 -> error
 
-state:
+grid:
   __j__
 | 0 0 1
 i 1 0 2
@@ -32,10 +33,33 @@ is represented as:
 (1,0) (1,1) (1,2) (1,3)
 (2,0) (2,1) (2,2) (2,3)
 
+max_depths is for:
+ turn | depth
+  1   |   1
+  2   |   4
+  3   |   5
+  ...
+
 """
+class States_cache:
+    def __init__(self):
+        self.cached_states = {}
+
+    def cache_state(self, state, evaluation):
+        self.cached_states[tuple(state.grid)] = evaluation
+
+    def already_cached(self, state):
+        return tuple(state.grid) in self.cached_states
+
+    def get_cached_value(self, state):
+        return self.cached_states[tuple(state.grid)]
+
+    def clear(self):
+        self.cached_states.clear()
+
 class Game_state:
-    def __init__(self, state=None, heights=None):
-        self.state   = [0 for _ in range(42)]
+    def __init__(self):
+        self.grid    = [0 for _ in range(42)]
         self.heights = [0 for _ in range(7)]
 
     def col_to_idx(self, col):
@@ -46,19 +70,22 @@ class Game_state:
 
     def idx_to_ij(self, idx):
         return (int(idx / 7), idx % 7)
+
+    def can_insert_coin(self, col):
+        return (self.heights[col] <= 5)
     
     def insert_coin(self, pos, color):
         self.heights[pos] += 1 # the order of this two operations is critical
-        self.state[self.col_to_idx(pos)] = color
+        self.grid[self.col_to_idx(pos)] = color
 
     def remove_coin(self, pos):
-        self.state[self.col_to_idx(pos)] = 0 # the order of this two operations is critical
+        self.grid[self.col_to_idx(pos)] = 0 # the order of this two operations is critical
         self.heights[pos] -= 1
 
     def check_connect4(self, f1, f2, i, j):
         tmp = 1
         for k in range(1, 4): # [1,2,3]
-            if self.state[self.ij_to_idx( i + k*f1, j + k*f2 )] == self.state[self.ij_to_idx(i,j)]:
+            if self.grid[self.ij_to_idx( i + k*f1, j + k*f2 )] == self.grid[self.ij_to_idx(i,j)]:
                 tmp += 1
             else:
                 break
@@ -67,7 +94,7 @@ class Game_state:
     def is_win(self):
         for i in range(6):
             for j in range(7):
-                if self.state[self.ij_to_idx(i,j)] != 0:
+                if self.grid[self.ij_to_idx(i,j)] != 0:
                     # horizontal
                     if (j + 3 < 7) and self.check_connect4(0, 1, i, j):
                         return True
@@ -86,7 +113,7 @@ class Game_state:
         tmp = 0
         for k in range(1, 4): # [1,2,3]
             if i + k*f1 >= 0 and i + k*f1 < 6 and j + k*f2 >= 0 and j + k*f2 < 7 and \
-               self.state[self.ij_to_idx( i + k*f1, j + k*f2 )] == self.state[self.ij_to_idx(i,j)]:
+               self.grid[self.ij_to_idx( i + k*f1, j + k*f2 )] == self.grid[self.ij_to_idx(i,j)]:
                 tmp += 1
             else:
                 break
@@ -110,14 +137,14 @@ class Game_state:
     def count_connect3(self, f1, f2, i, j):
         tmp = 1
         for k in range(1, 3): # [1, 2]
-            if self.state[self.ij_to_idx( i + k*f1, j + k*f2 )] == self.state[self.ij_to_idx(i,j)]:
+            if self.grid[self.ij_to_idx( i + k*f1, j + k*f2 )] == self.grid[self.ij_to_idx(i,j)]:
                 tmp += 1
-            elif (self.state[self.ij_to_idx( i + k*f1, j + k*f2 )] != self.state[self.ij_to_idx(i,j)]) and (self.state[self.ij_to_idx( i + k*f1, j + k*f2 )] != 0):
+            elif (self.grid[self.ij_to_idx( i + k*f1, j + k*f2 )] != self.grid[self.ij_to_idx(i,j)]) and (self.grid[self.ij_to_idx( i + k*f1, j + k*f2 )] != 0):
                 tmp = 0
                 break
         
         if tmp == 3:
-            if self.state[self.ij_to_idx(i,j)] == 1: # player 1
+            if self.grid[self.ij_to_idx(i,j)] == 1: # player 1
                 return 1
             else:                                    # player 2
                 return -1
@@ -127,7 +154,7 @@ class Game_state:
         tot_count = 0
         for i in range(6):
             for j in range(7):
-                if self.state[self.ij_to_idx(i,j)] != 0:
+                if self.grid[self.ij_to_idx(i,j)] != 0:
                     # horizontal
                     if j + 2 < 7:
                         tot_count += self.count_connect3(0, 1, i, j)
@@ -147,7 +174,20 @@ class Game_state:
         char = ['-', 'X', 'O']
         for _ in range(6):
             for __ in range(7):
-                print(char[self.state[idx]], end=' ')
+                print(char[self.grid[idx]], end=' ')
+                idx += 1
+            print()
+        print("_____________")
+        for i in range(7):
+            print(i, end=" ")
+        print("\n")
+
+    def print_from_grid(self, grid):
+        idx = 0
+        char = ['-', 'X', 'O']
+        for _ in range(6):
+            for __ in range(7):
+                print(char[grid[idx]], end=' ')
                 idx += 1
             print()
         print("_____________")
@@ -169,6 +209,7 @@ class Minimax_agent:
         self.max_depths = max_depths
         self.default_depth = default_depth 
         self.turn_times = []
+        self.cache = States_cache()
 
     def print_turn_times(self):
         for i, time in enumerate(self.turn_times):
@@ -182,9 +223,6 @@ class Minimax_agent:
         else:
             return val
 
-    def can_insert_coin(self, state, pos):
-        return (state.heights[pos] <= 5)
-
     def get_max_depth(self, turn, print_val=False):
         max_depth = self.default_depth
         if turn in self.max_depths.keys():
@@ -194,22 +232,29 @@ class Minimax_agent:
         return max_depth
 
     def max_node(self, state, depth, alpha, beta):
+        if self.cache.already_cached(state):
+            return self.cache.get_cached_value(state)
+
         if(depth == self.max_depth):
             return self.discount(self.CONNECT3 * state.evaluate(), depth)
 
         max_val = -self.INF
         for col in self.columns:
-            if not self.can_insert_coin(state, col):
+            if not state.can_insert_coin(col):
                 continue
 
             state.insert_coin(col, self.PLAYER1) # insert coin and go down with recursion
+            move_val = 0
             # chek if this move lead to a win
             if state.is_win_fast(col):
-                #max_val = max(max_val, self.discount(self.WIN, depth + 1))
-                state.remove_coin(col)
-                return self.discount(self.WIN, depth + 1)
+                move_val = self.discount(self.WIN, depth + 1)
+                #state.remove_coin(col)
+                #return self.discount(self.WIN, depth + 1)
             else: # if not, we have to calculate everything normally
-                max_val = max(max_val, self.min_node(state, depth + 1, alpha, beta))
+                move_val = self.min_node(state, depth + 1, alpha, beta)
+            max_val = max(max_val, move_val)
+            self.cache.cache_state(state, move_val)
+
             state.remove_coin(col) # remove coin to get the previous state
 
             if max_val > beta:
@@ -221,22 +266,30 @@ class Minimax_agent:
         return self.discount(max_val, depth)
 
     def min_node(self, state, depth, alpha, beta):
+        if self.cache.already_cached(state):
+            return self.cache.get_cached_value(state)
+
         if(depth == self.max_depth):
             return self.discount(self.CONNECT3 * state.evaluate(), depth)
 
         min_val = self.INF
         for col in self.columns:
-            if not self.can_insert_coin(state, col):
+            if not state.can_insert_coin(col):
                 continue
 
             state.insert_coin(col, self.PLAYER2) # insert coin and go on with recursion   
+
+            move_val = 0
             # chek if this move lead to a win
             if state.is_win_fast(col):
-                #min_val = min(min_val, self.discount(-self.WIN, depth))
-                state.remove_coin(col)
-                return self.discount(-self.WIN, depth)
+                move_val = self.discount(-self.WIN, depth)
+                #state.remove_coin(col)
+                #return self.discount(-self.WIN, depth)
             else: # if not, we have to calculate everything normally
-                min_val = min(min_val, self.max_node(state, depth + 1, alpha, beta))
+                move_val = self.max_node(state, depth + 1, alpha, beta)
+            min_val = min(move_val, min_val)
+            self.cache.cache_state(state, move_val)
+
             state.remove_coin(col) # remove coin to get the previous state
 
             if min_val < alpha:
@@ -260,7 +313,7 @@ class Minimax_agent:
         alpha = -self.INF
         best_moves = []
         for col in self.columns:
-            if not self.can_insert_coin(state, col):
+            if not state.can_insert_coin(col):
                 continue
             tmp = 0
             state.insert_coin(col, self.PLAYER1)
@@ -285,41 +338,20 @@ class Minimax_agent:
         print("\nTime elapsed:", end - start)
         self.turn_times.append(end - start)
         
+        # ====================== remove next line if not working on the board ===========================
+        print(int(process.memory_info().rss / 2**20), "MB used")
+
+        # clear the cache
+        self.cache.clear()
+
         return best_moves[randint(0, len(best_moves)-1)]
 
 def main():
-    # turn | depth
-    #  1   |   1
-    #  2   |   4
-    #  3   |   5
-    # ...
-
+    # ====================== remove next line if not working on the board ===========================
+    print(int(process.memory_info().rss / 2**20), "MB used")
     
     curr_state = Game_state()
-    """ oblique
-    for _ in range(3):
-        curr_state.insert_coin(3, 1)
-    for _ in range(2):
-        curr_state.insert_coin(4, 1)
-    curr_state.insert_coin(5, 1)
 
-    for i in range(4):
-        curr_state.insert_coin(3 + i, 2)
-    
-    # other oblique
-    for _ in range(3):
-        curr_state.insert_coin(6, 1)
-    for _ in range(2):
-        curr_state.insert_coin(5, 1)
-    curr_state.insert_coin(4, 1)
-
-    for i in range(4):
-        curr_state.insert_coin(3 + i, 2)
-    
-    curr_state.print()
-    print(curr_state.is_win_fast(3))
-
-    """
     max_depths = {1: 1, 2: 4, 3: 5, 4: 6, 5: 6, 6: 6, 7: 6, 8: 7, 9: 7, 10: 7, 11: 8, 12: 8, 13: 9, 14: 9, 15: 10}
     default_depth = 15
 
