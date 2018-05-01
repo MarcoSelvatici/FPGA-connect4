@@ -1,7 +1,4 @@
-
-
 from random import randint
-import sys  # flush print
 
 import time # measure time performance
 
@@ -45,17 +42,18 @@ class States_cache:
     def __init__(self):
         self.cached_states = {}
 
-    def cache_state(self, state, evaluation):
-        self.cached_states[tuple(state.grid)] = evaluation
+    def cache_state(self, state_grid, evaluation):
+        self.cached_states[state_grid] = evaluation
 
-    def already_cached(self, state):
-        return tuple(state.grid) in self.cached_states
+    def already_cached(self, state_grid):
+        return state_grid in self.cached_states
 
-    def get_cached_value(self, state):
-        return self.cached_states[tuple(state.grid)]
+    def get_cached_value(self, state_grid):
+        return self.cached_states[state_grid]
 
     def clear(self):
         self.cached_states.clear()
+
 
 class Game_state:
     def __init__(self):
@@ -146,7 +144,7 @@ class Game_state:
         if tmp == 3:
             if self.grid[self.ij_to_idx(i,j)] == 1: # player 1
                 return 1
-            else:                                    # player 2
+            else:                                   # player 2
                 return -1
         return 0
     
@@ -231,9 +229,35 @@ class Minimax_agent:
             print("[with depth ", str(max_depth) + "]")
         return max_depth
 
+    def find_trivial_move(self, state):
+        # first check for win
+        for col in self.columns:
+            if not state.can_insert_coin(col):
+                continue
+            state.insert_coin(col, self.PLAYER1)
+            if state.is_win_fast(col):
+                state.remove_coin(col)
+                return col
+            state.remove_coin(col)
+
+        # second check for not lose
+        # check if the opponent would win in one move
+        for col in self.columns:
+            if not state.can_insert_coin(col):
+                continue
+            state.insert_coin(col, self.PLAYER2)
+            if state.is_win_fast(col):
+                state.remove_coin(col)
+                return col
+            state.remove_coin(col)
+
+        # nothing found
+        return -1
+
     def max_node(self, state, depth, alpha, beta):
-        if self.cache.already_cached(state):
-            return self.cache.get_cached_value(state)
+        state_grid = tuple(state.grid)
+        if self.cache.already_cached(state_grid):
+            return self.cache.get_cached_value(state_grid)
 
         if(depth == self.max_depth):
             return self.discount(self.CONNECT3 * state.evaluate(), depth)
@@ -253,7 +277,7 @@ class Minimax_agent:
             else: # if not, we have to calculate everything normally
                 move_val = self.min_node(state, depth + 1, alpha, beta)
             max_val = max(max_val, move_val)
-            self.cache.cache_state(state, move_val)
+            self.cache.cache_state(tuple(state.grid), move_val)
 
             state.remove_coin(col) # remove coin to get the previous state
 
@@ -266,8 +290,9 @@ class Minimax_agent:
         return self.discount(max_val, depth)
 
     def min_node(self, state, depth, alpha, beta):
-        if self.cache.already_cached(state):
-            return self.cache.get_cached_value(state)
+        state_grid = tuple(state.grid)
+        if self.cache.already_cached(state_grid):
+            return self.cache.get_cached_value(state_grid)
 
         if(depth == self.max_depth):
             return self.discount(self.CONNECT3 * state.evaluate(), depth)
@@ -288,7 +313,7 @@ class Minimax_agent:
             else: # if not, we have to calculate everything normally
                 move_val = self.max_node(state, depth + 1, alpha, beta)
             min_val = min(move_val, min_val)
-            self.cache.cache_state(state, move_val)
+            self.cache.cache_state(tuple(state.grid), move_val)
 
             state.remove_coin(col) # remove coin to get the previous state
 
@@ -301,8 +326,16 @@ class Minimax_agent:
         return self.discount(min_val, depth)
 
     def get_move(self, state):
-        print("getting values for moves: ", end="")
         self.turn += 1
+
+        # try trivial moves
+        move = self.find_trivial_move(state)
+        if move != -1:
+            print("trivial move: ", move)
+            return move
+
+        # minimax
+        print("getting values for moves: ", end="")
 
         # get max depth
         self.max_depth = self.get_max_depth(self.turn, True)
@@ -323,8 +356,7 @@ class Minimax_agent:
                 tmp = self.min_node(state, 1, alpha, self.INF)
             state.remove_coin(col)
             
-            print(tmp, end=" ")
-            sys.stdout.flush() # avoid buffering on print
+            print(tmp, end=" ", flush = True)
             
             if tmp > max_val:
                 best_moves.clear()
@@ -337,7 +369,7 @@ class Minimax_agent:
         end = time.time()
         print("\nTime elapsed:", end - start)
         self.turn_times.append(end - start)
-        
+
         # ====================== remove next line if not working on the board ===========================
         print(int(process.memory_info().rss / 2**20), "MB used")
 
@@ -346,14 +378,15 @@ class Minimax_agent:
 
         return best_moves[randint(0, len(best_moves)-1)]
 
+
 def main():
     # ====================== remove next line if not working on the board ===========================
     print(int(process.memory_info().rss / 2**20), "MB used")
     
     curr_state = Game_state()
 
-    max_depths = {1: 1, 2: 4, 3: 5, 4: 6, 5: 6, 6: 6, 7: 6, 8: 7, 9: 7, 10: 7, 11: 8, 12: 8, 13: 9, 14: 9, 15: 10}
-    default_depth = 15
+    max_depths = {1: 1, 2: 4, 3: 5, 4: 5, 5: 5, 6: 5, 7: 5, 8: 6, 9: 6, 10: 6, 11: 6, 12: 7, 13: 7, 14: 8, 15: 9}
+    default_depth = 12
 
     curr_state = Game_state()
     agent = Minimax_agent(max_depths, default_depth)
@@ -376,7 +409,6 @@ def main():
         curr_state.print()
     print("Game over")
     agent.print_turn_times()
-    
     
 if __name__ == "__main__":
     main()    
