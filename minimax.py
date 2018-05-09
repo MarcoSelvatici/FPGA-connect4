@@ -56,9 +56,19 @@ class States_cache:
 
 
 class Game_state:
-    def __init__(self):
-        self.grid    = [0 for _ in range(42)]
-        self.heights = [0 for _ in range(7)]
+    def __init__(self, grid = None):
+        if grid == None:
+            self.grid    = [0 for _ in range(42)]
+            self.heights = [0 for _ in range(7)]
+        else:
+            self.grid = grid
+            self.heights = [0 for _ in range(7)]
+            for col in range(7):
+                for row in range(6):
+                    if self.grid[self.ij_to_idx(row,col)] != 0:
+                        self.heights[col] = (6 - row)
+                        break
+
 
     def col_to_idx(self, col):
         return (7 * (6 - self.heights[col])) + col
@@ -380,6 +390,19 @@ class Minimax_agent:
 
 
 def main():
+    # state = [0,0,0,0,2,0,0, \
+    #          0,1,0,0,2,0,0, \
+    #          1,2,0,0,1,0,0, \
+    #          1,1,1,0,1,0,0, \
+    #          2,2,2,2,2,0,0, \
+    #          1,1,1,1,1,1,0]
+
+    # curr_state = Game_state(state)
+    # curr_state.print()
+    # for h in curr_state.heights:
+    #     print(h, end = " ")
+    # print()
+
     # ====================== remove next line if not working on the board ===========================
     print(int(process.memory_info().rss / 2**20), "MB used")
     
