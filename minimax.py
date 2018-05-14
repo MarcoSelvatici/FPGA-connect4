@@ -69,7 +69,6 @@ class Game_state:
                         self.heights[col] = (6 - row)
                         break
 
-
     def col_to_idx(self, col):
         return (7 * (6 - self.heights[col])) + col
     
@@ -89,6 +88,13 @@ class Game_state:
     def remove_coin(self, pos):
         self.grid[self.col_to_idx(pos)] = 0 # the order of this two operations is critical
         self.heights[pos] -= 1
+
+    def count_coins(self):
+        tot = 0
+        for coin in self.grid:
+            if coin != 0:
+                tot += 1
+        return tot
 
     def check_connect4(self, f1, f2, i, j):
         tmp = 1
@@ -205,7 +211,7 @@ class Game_state:
 
 
 class Minimax_agent:
-    def __init__(self, max_depths, default_depth):
+    def __init__(self, max_depths, default_depth, turn = 0):
         self.INF = 99999999
         self.WIN = 10000
         self.CONNECT3 = 50
@@ -213,9 +219,11 @@ class Minimax_agent:
         self.PLAYER1 = 1
         self.PLAYER2 = 2
         self.columns = [3, 4, 2, 5, 1, 6, 0]
-        self.turn = 0
+
+        self.turn = turn
         self.max_depths = max_depths
         self.default_depth = default_depth 
+
         self.turn_times = []
         self.cache = States_cache()
 
@@ -339,16 +347,16 @@ class Minimax_agent:
         self.turn += 1
 
         # try trivial moves
-        move = self.find_trivial_move(state)
-        if move != -1:
-            print("trivial move: ", move)
-            return move
+        #move = self.find_trivial_move(state)
+        #if move != -1:
+         #   print("trivial move: ", move)
+          #  return move
 
         # minimax
         print("getting values for moves: ", end="")
 
         # get max depth
-        self.max_depth = self.get_max_depth(self.turn, True)
+        self.max_depth = self.get_max_depth(state.count_coins(), True)
 
         start = time.time()
 
@@ -386,7 +394,12 @@ class Minimax_agent:
         # clear the cache
         self.cache.clear()
 
-        return best_moves[randint(0, len(best_moves)-1)]
+        if max_val > 200:
+            max_val = 200
+        elif max_val < -200:
+            max_val = -200
+
+        return (best_moves[randint(0, len(best_moves)-1)], max_val)
 
 
 def main():
@@ -408,7 +421,13 @@ def main():
     
     curr_state = Game_state()
 
-    max_depths = {1: 1, 2: 4, 3: 5, 4: 5, 5: 5, 6: 5, 7: 5, 8: 6, 9: 6, 10: 6, 11: 6, 12: 7, 13: 7, 14: 8, 15: 9}
+    max_depths = {0: 1, 1: 1, \
+                  2: 4, 3: 4, \
+                  4: 5, 5: 5, 6: 5, 7: 5, 8: 5, 9: 5, 10: 5, 11: 5, 12: 5, 13: 5, \
+                  14: 6, 15: 6, 16: 6, 17: 6, 18: 6, 19: 6, 20: 6, 21: 6, \
+                  22: 7, 23: 7, 24: 7, 25: 7, \
+                  26: 8, 27: 8, \
+                  28: 9, 29: 9}
     default_depth = 12
 
     curr_state = Game_state()
@@ -423,9 +442,11 @@ def main():
             while pos < 0 or pos > 6 or curr_state.heights[pos] >= 6:
                 print("Trying to insert a coin in an invalid position")
                 pos = int(input("Your move: "))
+            agent.turn += 1
             curr_state.insert_coin(pos, 2)
         else:
-            pos = agent.get_move(curr_state)
+            pos, max_val = agent.get_move(curr_state)
+            print("max_val", max_val)
             curr_state.insert_coin(pos, 1)
         turn += 1
         print("\n_____________________\n")
